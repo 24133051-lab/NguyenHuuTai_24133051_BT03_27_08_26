@@ -35,7 +35,7 @@ public class CategoryDAO implements ICategoryDAO {
                 trans.rollback();
             }
 
-            e.printStackTrace();
+            throw new IllegalStateException("Không thể thêm danh mục.", e);
 
         } finally {
 
@@ -66,7 +66,7 @@ public class CategoryDAO implements ICategoryDAO {
                 trans.rollback();
             }
 
-            e.printStackTrace();
+            throw new IllegalStateException("Không thể cập nhật danh mục.", e);
 
         } finally {
 
@@ -102,7 +102,7 @@ public class CategoryDAO implements ICategoryDAO {
                 trans.rollback();
             }
 
-            e.printStackTrace();
+            throw new IllegalStateException("Không thể xóa danh mục đang được sử dụng.", e);
 
         } finally {
 

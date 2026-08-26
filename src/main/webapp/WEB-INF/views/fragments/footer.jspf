@@ -1,0 +1,24 @@
+<%@ page pageEncoding="UTF-8" %>
+<footer class="site-footer">
+    <div class="container footer-grid">
+        <div>
+            <a class="brand brand-light" href="${pageContext.request.contextPath}/">
+                <span class="brand-mark">N</span><span>NOVA</span>
+            </a>
+            <p>Không gian mua sắm hiện đại với những sản phẩm mới được tuyển chọn mỗi ngày.</p>
+        </div>
+        <div>
+            <h3>Khám phá</h3>
+            <a href="${pageContext.request.contextPath}/">Trang chủ</a>
+            <a href="${pageContext.request.contextPath}/product">Tất cả sản phẩm</a>
+        </div>
+        <div>
+            <h3>Tài khoản</h3>
+            <a href="${pageContext.request.contextPath}/login">Đăng nhập</a>
+            <a href="${pageContext.request.contextPath}/register">Đăng ký</a>
+            <a href="${pageContext.request.contextPath}/forgot-password">Quên mật khẩu</a>
+        </div>
+    </div>
+    <div class="container footer-bottom">© 2026 Nova Store. Xây dựng với Jakarta Servlet, JPA và Cloudinary.</div>
+</footer>
+<script src="${pageContext.request.contextPath}/assets/js/app.js"></script>

@@ -1,6 +1,7 @@
 package test.vn.entities;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.List;
 
 import jakarta.persistence.Column;
@@ -39,12 +40,19 @@ public class Category implements Serializable {
     )
     private String images;
 
+    @Column(name = "imagePublicId", length = 255)
+    private String imagePublicId;
+
     @Column(name = "status")
     private int status;
 
     // 1 Category có nhiều Video
     @OneToMany(mappedBy = "categories")
-    private List<Video> videos;
+    private List<Video> videos = new ArrayList<>();
+
+    // 1 Category có nhiều Product
+    @OneToMany(mappedBy = "category")
+    private List<Product> products = new ArrayList<>();
 
     public Category() {
     }
@@ -85,6 +93,14 @@ public class Category implements Serializable {
         this.images = images;
     }
 
+    public String getImagePublicId() {
+        return imagePublicId;
+    }
+
+    public void setImagePublicId(String imagePublicId) {
+        this.imagePublicId = imagePublicId;
+    }
+
     public int getStatus() {
         return status;
     }
@@ -99,6 +115,14 @@ public class Category implements Serializable {
 
     public void setVideos(List<Video> videos) {
         this.videos = videos;
+    }
+
+    public List<Product> getProducts() {
+        return products;
+    }
+
+    public void setProducts(List<Product> products) {
+        this.products = products;
     }
 
     public Video addVideo(Video video) {

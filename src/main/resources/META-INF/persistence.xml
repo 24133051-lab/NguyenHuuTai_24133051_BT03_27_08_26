@@ -17,6 +17,8 @@
 
         <class>test.vn.entities.Category</class>
         <class>test.vn.entities.Video</class>
+        <class>test.vn.entities.User</class>
+        <class>test.vn.entities.Product</class>
 
         <properties>
 

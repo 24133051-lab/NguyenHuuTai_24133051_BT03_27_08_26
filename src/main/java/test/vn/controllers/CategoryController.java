@@ -1,7 +1,6 @@
 package test.vn.controllers;
 
 import java.io.IOException;
-import java.util.List;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.MultipartConfig;
@@ -9,12 +8,15 @@ import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.Part;
 
 import test.vn.entities.Category;
+import test.vn.services.CloudinaryService;
+import test.vn.services.CloudinaryService.UploadResult;
 import test.vn.services.ICategoryService;
 import test.vn.services.impl.CategoryServiceImpl;
 
-@MultipartConfig
+@MultipartConfig(maxFileSize = 5L * 1024 * 1024, maxRequestSize = 6L * 1024 * 1024)
 @WebServlet(urlPatterns = {
         "/admin/categories",
         "/admin/category/add",
@@ -25,153 +27,209 @@ import test.vn.services.impl.CategoryServiceImpl;
 })
 public class CategoryController extends HttpServlet {
 
-    private ICategoryService categoryService =
-            new CategoryServiceImpl();
+    private static final long serialVersionUID = 1L;
 
-    // =========================
-    // GET
-    // =========================
+    private final ICategoryService categoryService = new CategoryServiceImpl();
+    private final CloudinaryService cloudinaryService = new CloudinaryService();
+
     @Override
-    protected void doGet(HttpServletRequest req,
-                         HttpServletResponse resp)
+    protected void doGet(HttpServletRequest request,
+                         HttpServletResponse response)
             throws ServletException, IOException {
+        String path = request.getServletPath();
 
-        String path = req.getServletPath();
-
-        // Danh sách Category
-        if (path.equals("/admin/categories")) {
-
-            List<Category> list =
-                    categoryService.findAll();
-
-            req.setAttribute("listcate", list);
-
-            req.getRequestDispatcher(
-                    "/admin/category-list.jsp"
-            ).forward(req, resp);
-
+        if ("/admin/categories".equals(path)) {
+            request.setAttribute("listcate", categoryService.findAll());
+            request.getRequestDispatcher("/admin/category-list.jsp").forward(request, response);
+            return;
         }
 
-        // Trang thêm
-        else if (path.equals("/admin/category/add")) {
-
-            req.getRequestDispatcher(
-                    "/admin/category-add.jsp"
-            ).forward(req, resp);
-
+        if ("/admin/category/add".equals(path)) {
+            request.getRequestDispatcher("/admin/category-add.jsp").forward(request, response);
+            return;
         }
 
-        // Trang sửa
-        else if (path.equals("/admin/category/edit")) {
-
-            int id = Integer.parseInt(
-                    req.getParameter("id")
-            );
-
-            Category category =
-                    categoryService.findById(id);
-
-            req.setAttribute("cate", category);
-
-            req.getRequestDispatcher(
-                    "/admin/category-edit.jsp"
-            ).forward(req, resp);
-
+        if ("/admin/category/edit".equals(path)) {
+            Category category = findCategory(request, response);
+            if (category == null) {
+                return;
+            }
+            request.setAttribute("cate", category);
+            request.getRequestDispatcher("/admin/category-edit.jsp").forward(request, response);
+            return;
         }
 
-        // Xóa
-        else if (path.equals("/admin/category/delete")) {
+        response.sendError(HttpServletResponse.SC_NOT_FOUND);
+    }
 
-            int id = Integer.parseInt(
-                    req.getParameter("id")
-            );
+    @Override
+    protected void doPost(HttpServletRequest request,
+                          HttpServletResponse response)
+            throws ServletException, IOException {
+        request.setCharacterEncoding("UTF-8");
+        String path = request.getServletPath();
 
-            categoryService.delete(id);
-
-            resp.sendRedirect(
-                    req.getContextPath()
-                    + "/admin/categories"
-            );
+        if ("/admin/category/insert".equals(path)) {
+            insert(request, response);
+        } else if ("/admin/category/update".equals(path)) {
+            update(request, response);
+        } else if ("/admin/category/delete".equals(path)) {
+            delete(request, response);
+        } else {
+            response.sendError(HttpServletResponse.SC_NOT_FOUND);
         }
     }
 
-    // =========================
-    // POST
-    // =========================
-    @Override
-    protected void doPost(HttpServletRequest req,
-                          HttpServletResponse resp)
+    private void insert(HttpServletRequest request,
+                        HttpServletResponse response)
             throws ServletException, IOException {
-
-        req.setCharacterEncoding("UTF-8");
-
-        String path = req.getServletPath();
-
-        // =====================
-        // INSERT
-        // =====================
-        if (path.equals("/admin/category/insert")) {
-
-            String categoryname =
-                    req.getParameter("categoryname");
-
-            int status = Integer.parseInt(
-                    req.getParameter("status")
-            );
-
-            String images =
-                    req.getParameter("images");
-
-            Category category =
-                    new Category();
-
-            category.setCategoryname(categoryname);
-            category.setStatus(status);
-            category.setImages(images);
-
-            categoryService.insert(category);
-
-            resp.sendRedirect(
-                    req.getContextPath()
-                    + "/admin/categories"
-            );
+        String name = value(request, "categoryname");
+        if (name.isBlank()) {
+            request.setAttribute("error", "Tên danh mục không được để trống.");
+            request.getRequestDispatcher("/admin/category-add.jsp").forward(request, response);
+            return;
+        }
+        if (categoryService.findByCategoryName(name) != null) {
+            request.setAttribute("error", "Tên danh mục đã tồn tại.");
+            request.getRequestDispatcher("/admin/category-add.jsp").forward(request, response);
+            return;
         }
 
-        // =====================
-        // UPDATE
-        // =====================
-        else if (path.equals("/admin/category/update")) {
+        Category category = new Category();
+        category.setCategoryname(name);
+        category.setStatus(parseStatus(request));
+        category.setImages(value(request, "imageUrl"));
 
-            int id = Integer.parseInt(
-                    req.getParameter("categoryid")
-            );
+        UploadResult uploadedImage = null;
+        try {
+            Part imageFile = request.getPart("imageFile");
+            if (cloudinaryService.hasFile(imageFile)) {
+                uploadedImage = cloudinaryService.uploadImage(imageFile, "bt02_jpa/categories");
+                category.setImages(uploadedImage.url());
+                category.setImagePublicId(uploadedImage.publicId());
+            }
+            categoryService.insert(category);
+            flash(request, "flashSuccess", "Đã thêm danh mục mới.");
+            redirectToList(request, response);
+        } catch (RuntimeException exception) {
+            if (uploadedImage != null) {
+                safelyDeleteImage(uploadedImage.publicId());
+            }
+            request.setAttribute("error", exception.getMessage());
+            request.setAttribute("formCategory", category);
+            request.getRequestDispatcher("/admin/category-add.jsp").forward(request, response);
+        }
+    }
 
-            String categoryname =
-                    req.getParameter("categoryname");
+    private void update(HttpServletRequest request,
+                        HttpServletResponse response)
+            throws ServletException, IOException {
+        Category category = findCategory(request, response);
+        if (category == null) {
+            return;
+        }
 
-            int status = Integer.parseInt(
-                    req.getParameter("status")
-            );
+        String name = value(request, "categoryname");
+        if (name.isBlank()) {
+            request.setAttribute("error", "Tên danh mục không được để trống.");
+            request.setAttribute("cate", category);
+            request.getRequestDispatcher("/admin/category-edit.jsp").forward(request, response);
+            return;
+        }
 
-            String images =
-                    req.getParameter("images");
+        String oldImageUrl = category.getImages();
+        String oldPublicId = category.getImagePublicId();
+        UploadResult uploadedImage = null;
+        try {
+            category.setCategoryname(name);
+            category.setStatus(parseStatus(request));
 
-            Category category =
-                    categoryService.findById(id);
-
-            if (category != null) {
-
-                category.setCategoryname(categoryname);
-                category.setStatus(status);
-                category.setImages(images);
-
-                categoryService.update(category);
+            Part imageFile = request.getPart("imageFile");
+            if (cloudinaryService.hasFile(imageFile)) {
+                uploadedImage = cloudinaryService.uploadImage(imageFile, "bt02_jpa/categories");
+                category.setImages(uploadedImage.url());
+                category.setImagePublicId(uploadedImage.publicId());
+            } else if (!value(request, "imageUrl").isBlank()
+                    && !value(request, "imageUrl").equals(oldImageUrl)) {
+                category.setImages(value(request, "imageUrl"));
+                category.setImagePublicId(null);
             }
 
-            resp.sendRedirect(
-                    req.getContextPath()
-                    + "/admin/categories"
-            );
+            categoryService.update(category);
+            if (oldPublicId != null && !oldPublicId.equals(category.getImagePublicId())) {
+                safelyDeleteImage(oldPublicId);
+            }
+            flash(request, "flashSuccess", "Đã cập nhật danh mục.");
+            redirectToList(request, response);
+        } catch (RuntimeException exception) {
+            if (uploadedImage != null) {
+                safelyDeleteImage(uploadedImage.publicId());
+                category.setImages(oldImageUrl);
+                category.setImagePublicId(oldPublicId);
+            }
+            request.setAttribute("error", exception.getMessage());
+            request.setAttribute("cate", category);
+            request.getRequestDispatcher("/admin/category-edit.jsp").forward(request, response);
         }
+    }
+
+    private void delete(HttpServletRequest request,
+                        HttpServletResponse response) throws IOException {
+        try {
+            int id = Integer.parseInt(request.getParameter("id"));
+            Category category = categoryService.findById(id);
+            if (category != null) {
+                categoryService.delete(id);
+                safelyDeleteImage(category.getImagePublicId());
+            }
+            flash(request, "flashSuccess", "Đã xóa danh mục.");
+        } catch (RuntimeException exception) {
+            flash(request, "flashError", exception.getMessage());
+        }
+        redirectToList(request, response);
+    }
+
+    private Category findCategory(HttpServletRequest request,
+                                  HttpServletResponse response) throws IOException {
+        String rawId = request.getParameter("id");
+        if (rawId == null) {
+            rawId = request.getParameter("categoryid");
+        }
+        try {
+            Category category = categoryService.findById(Integer.parseInt(rawId));
+            if (category == null) {
+                response.sendError(HttpServletResponse.SC_NOT_FOUND, "Không tìm thấy danh mục.");
+            }
+            return category;
+        } catch (NumberFormatException exception) {
+            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Mã danh mục không hợp lệ.");
+            return null;
+        }
+    }
+
+    private int parseStatus(HttpServletRequest request) {
+        return "1".equals(request.getParameter("status")) ? 1 : 0;
+    }
+
+    private String value(HttpServletRequest request, String name) {
+        String value = request.getParameter(name);
+        return value == null ? "" : value.trim();
+    }
+
+    private void safelyDeleteImage(String publicId) {
+        try {
+            cloudinaryService.deleteImage(publicId);
+        } catch (RuntimeException ignored) {
+            // Database operation has succeeded; stale cloud media must not break the request.
+        }
+    }
+
+    private void flash(HttpServletRequest request, String key, String value) {
+        request.getSession().setAttribute(key, value);
+    }
+
+    private void redirectToList(HttpServletRequest request,
+                                HttpServletResponse response) throws IOException {
+        response.sendRedirect(request.getContextPath() + "/admin/categories");
     }
 }
